@@ -12,7 +12,7 @@ import inotify.calls
 
 # Constants.
 
-_DEFAULT_EPOLL_BLOCK_DURATION_S = 1
+_DEFAULT_BLOCK_DURATION_S = 1
 _HEADER_STRUCT_FORMAT = 'iIII'
 
 _DEFAULT_TERMINAL_EVENTS = (
@@ -47,7 +47,7 @@ class TerminalEventException(Exception):
 
 
 class Inotify(object):
-    def __init__(self, paths=[], block_duration_s=_DEFAULT_EPOLL_BLOCK_DURATION_S):
+    def __init__(self, paths=[], block_duration_s=_DEFAULT_BLOCK_DURATION_S):
         self.__block_duration = block_duration_s
         self.__watches = {}
         self.__watches_r = {}
@@ -56,8 +56,8 @@ class Inotify(object):
         self.__inotify_fd = inotify.calls.inotify_init()
         _LOGGER.debug("Inotify handle is (%d).", self.__inotify_fd)
 
-        self.__epoll = select.epoll()
-        self.__epoll.register(self.__inotify_fd, select.POLLIN)
+        self.__poll = select.poll()
+        self.__poll.register(self.__inotify_fd, select.POLLIN)
 
         self.__last_success_return = None
 
@@ -206,7 +206,7 @@ class Inotify(object):
             # Poll, but manage signal-related errors.
 
             try:
-                events = self.__epoll.poll(block_duration_s)
+                events = self.__poll.poll(block_duration_s)
             except IOError as e:
                 if e.errno != EINTR:
                     raise
@@ -224,7 +224,7 @@ class Inotify(object):
                 # (fd) looks to always match the inotify FD.
 
                 names = self._get_event_names(event_type)
-                _LOGGER.debug("Events received from epoll: {}".format(names))
+                _LOGGER.debug("Events received from poll: {}".format(names))
 
                 for (header, type_names, path, filename) \
                         in self._handle_inotify_event(fd):
@@ -256,7 +256,7 @@ class Inotify(object):
 
 class _BaseTree(object):
     def __init__(self, mask=inotify.constants.IN_ALL_EVENTS,
-                 block_duration_s=_DEFAULT_EPOLL_BLOCK_DURATION_S):
+                 block_duration_s=_DEFAULT_BLOCK_DURATION_S):
 
         # No matter what we actually received as the mask, make sure we have
         # the minimum that we require to curate our list of watches.
@@ -331,7 +331,7 @@ class InotifyTree(_BaseTree):
     """Recursively watch a path."""
 
     def __init__(self, path, mask=inotify.constants.IN_ALL_EVENTS,
-                 block_duration_s=_DEFAULT_EPOLL_BLOCK_DURATION_S):
+                 block_duration_s=_DEFAULT_BLOCK_DURATION_S):
         super(InotifyTree, self).__init__(mask=mask, block_duration_s=block_duration_s)
 
         self.__root_path = path
@@ -365,7 +365,7 @@ class InotifyTrees(_BaseTree):
     """Recursively watch over a list of trees."""
 
     def __init__(self, paths, mask=inotify.constants.IN_ALL_EVENTS,
-                 block_duration_s=_DEFAULT_EPOLL_BLOCK_DURATION_S):
+                 block_duration_s=_DEFAULT_BLOCK_DURATION_S):
         super(InotifyTrees, self).__init__(mask=mask, block_duration_s=block_duration_s)
 
         self.__load_trees(paths)
